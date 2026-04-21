@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CloudBalance — Load Orchestrator</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Sora:wght@300;400;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg-start: #e8f4fd; --bg-mid: #dbeeff; --bg-end: #f0f8ff;
+    --glass: rgba(255,255,255,0.55); --glass-border: rgba(255,255,255,0.75);
+    --glass-shadow: 0 8px 40px rgba(100,160,220,0.18);
+    --accent: #2563eb; --accent-light: #60a5fa; --accent-glow: rgba(37,99,235,0.15);
+    --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
+    --text: #1e293b; --text-muted: #64748b; --text-light: #94a3b8;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'DM Sans',sans-serif;background:linear-gradient(135deg,var(--bg-start) 0%,var(--bg-mid) 45%,var(--bg-end) 100%);min-height:100vh;color:var(--text);overflow-x:hidden}
+  body::before{content:'';position:fixed;width:600px;height:600px;background:radial-gradient(circle,rgba(147,197,253,0.35) 0%,transparent 70%);top:-150px;left:-150px;border-radius:50%;pointer-events:none;animation:floatOrb1 18s ease-in-out infinite alternate}
+  body::after{content:'';position:fixed;width:500px;height:500px;background:radial-gradient(circle,rgba(196,181,253,0.2) 0%,transparent 70%);bottom:-100px;right:-100px;border-radius:50%;pointer-events:none;animation:floatOrb2 22s ease-in-out infinite alternate}
+  @keyframes floatOrb1{from{transform:translate(0,0) scale(1)}to{transform:translate(60px,40px) scale(1.1)}}
+  @keyframes floatOrb2{from{transform:translate(0,0) scale(1)}to{transform:translate(-50px,-30px) scale(1.08)}}
+
+  /* Header */
+  header{display:flex;align-items:center;justify-content:space-between;padding:20px 40px;backdrop-filter:blur(16px);background:rgba(255,255,255,0.5);border-bottom:1px solid var(--glass-border);position:sticky;top:0;z-index:100}
+  .logo{display:flex;align-items:center;gap:10px;font-family:'Sora',sans-serif;font-weight:700;font-size:1.3rem;color:var(--accent);letter-spacing:-0.5px}
+  .logo-icon{width:34px;height:34px;background:linear-gradient(135deg,#2563eb,#60a5fa);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;color:white;box-shadow:0 4px 14px rgba(37,99,235,0.35)}
+  .status-badge{display:flex;align-items:center;gap:6px;font-size:0.78rem;font-weight:500;color:var(--success);background:rgba(16,185,129,0.1);padding:6px 14px;border-radius:20px;border:1px solid rgba(16,185,129,0.25)}
+  .status-dot{width:7px;height:7px;background:var(--success);border-radius:50%;animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.6;transform:scale(1.3)}}
+
+  /* Layout */
+  .container{max-width:1280px;margin:0 auto;padding:36px 32px 60px}
+  .page-title{font-family:'Sora',sans-serif;font-size:2rem;font-weight:700;color:var(--text);letter-spacing:-0.8px;margin-bottom:4px}
+  .page-sub{font-size:0.92rem;color:var(--text-muted);margin-bottom:36px}
+  .grid{display:grid;grid-template-columns:1fr 1.5fr;gap:28px}
+
+  /* Glass Card */
+  .glass-card{background:var(--glass);backdrop-filter:blur(20px);border:1px solid var(--glass-border);border-radius:20px;box-shadow:var(--glass-shadow);padding:28px;transition:box-shadow 0.25s}
+  .glass-card:hover{box-shadow:0 12px 50px rgba(100,160,220,0.25)}
+  .card-title{font-family:'Sora',sans-serif;font-size:0.78rem;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-muted);margin-bottom:18px}
+
+  /* Action Buttons */
+  .actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .action-btn{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:16px 18px;border:1px solid rgba(255,255,255,0.8);border-radius:14px;background:rgba(255,255,255,0.65);cursor:pointer;transition:all 0.22s cubic-bezier(0.34,1.56,0.64,1);text-align:left;position:relative;overflow:hidden}
+  .action-btn:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 6px 24px rgba(37,99,235,0.15);border-color:rgba(37,99,235,0.3)}
+  .action-btn:active{transform:scale(0.97)}
+  .action-btn:disabled{opacity:0.55;cursor:not-allowed;transform:none}
+  .btn-icon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;background:rgba(100,116,139,0.1);color:var(--text-muted);flex-shrink:0}
+  .btn-label{font-size:0.85rem;font-weight:600;color:var(--text);line-height:1.2}
+  .btn-desc{font-size:0.72rem;color:var(--text-light)}
+
+  /* Input */
+  .input-group{display:flex;gap:10px;margin:16px 0 0}
+  .glass-input{flex:1;padding:11px 16px;background:rgba(255,255,255,0.7);border:1px solid rgba(255,255,255,0.9);border-radius:11px;font-family:'DM Sans',sans-serif;font-size:0.9rem;color:var(--text);outline:none;transition:border-color 0.2s,box-shadow 0.2s}
+  .glass-input::placeholder{color:var(--text-light)}
+  .glass-input:focus{border-color:var(--accent-light);box-shadow:0 0 0 3px rgba(37,99,235,0.1)}
+  .submit-btn{padding:11px 20px;background:linear-gradient(135deg,#2563eb,#3b82f6);color:white;border:none;border-radius:11px;font-family:'DM Sans',sans-serif;font-size:0.85rem;font-weight:600;cursor:pointer;white-space:nowrap;box-shadow:0 4px 14px rgba(37,99,235,0.3);transition:all 0.2s}
+  .submit-btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(37,99,235,0.4)}
+  .submit-btn:active{transform:scale(0.97)}
+
+  /* Stats */
+  .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
+  .stat-card{background:var(--glass);backdrop-filter:blur(20px);border:1px solid var(--glass-border);border-radius:16px;padding:18px 20px;box-shadow:var(--glass-shadow);transition:transform 0.2s}
+  .stat-card:hover{transform:translateY(-2px)}
+  .stat-label{font-size:0.72rem;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px}
+  .stat-value{font-family:'Sora',sans-serif;font-size:1.7rem;font-weight:700;color:var(--text);letter-spacing:-1px}
+  .stat-sub{font-size:0.72rem;color:var(--text-light);margin-top:4px}
+
+  /* Server bars */
+  .server-scroll{max-height:340px;overflow-y:auto;padding-right:4px}
+  .server-scroll::-webkit-scrollbar{width:3px}
+  .server-scroll::-webkit-scrollbar-thumb{background:rgba(100,116,139,0.2);border-radius:99px}
+  .server-list{display:flex;flex-direction:column;gap:10px}
+  .server-row{display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(255,255,255,0.55);border:1px solid rgba(255,255,255,0.85);border-radius:12px;transition:background 0.2s}
+  .server-row:hover{background:rgba(255,255,255,0.75)}
+  .server-name{font-size:0.8rem;font-weight:600;width:72px;flex-shrink:0;color:var(--text)}
+  .bar-track{flex:1;height:8px;background:rgba(148,163,184,0.2);border-radius:99px;overflow:hidden}
+  .bar-fill{height:100%;border-radius:99px;transition:width 0.6s cubic-bezier(0.4,0,0.2,1)}
+  .server-meta{font-size:0.75rem;color:var(--text-muted);width:64px;text-align:right;flex-shrink:0}
+  .server-badge{font-size:0.65rem;font-weight:600;padding:2px 8px;border-radius:20px;width:68px;text-align:center;flex-shrink:0}
+  .badge-NORMAL{background:rgba(16,185,129,0.12);color:var(--success)}
+  .badge-WARNING{background:rgba(245,158,11,0.12);color:var(--warning)}
+  .badge-OVERLOADED{background:rgba(239,68,68,0.12);color:var(--danger)}
+
+  /* Console */
+  .console-wrap{background:rgba(15,23,42,0.88);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);border-radius:0;overflow:hidden;height:240px}
+  .console-header{display:flex;align-items:center;gap:8px;padding:12px 16px;background:rgba(255,255,255,0.04);border-bottom:1px solid rgba(255,255,255,0.06)}
+  .console-dot{width:10px;height:10px;border-radius:50%}
+  .cd-red{background:#ff5f57}.cd-yel{background:#febc2e}.cd-grn{background:#28c840}
+  .console-label{font-size:0.72rem;color:rgba(255,255,255,0.3);font-family:'Sora',monospace;margin-left:6px}
+  .console-body{padding:16px 18px;font-family:'Courier New',monospace;font-size:0.8rem;color:rgba(186,230,253,0.85);height:calc(100% - 45px);overflow-y:auto;line-height:1.7}
+  .console-body::-webkit-scrollbar{width:4px}
+  .console-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15);border-radius:99px}
+  .log-info{color:#bfdbfe}.log-success{color:#86efac}.log-warn{color:#fde68a}.log-danger{color:#fca5a5}.log-accent{color:#c4b5fd}.log-muted{color:rgba(255,255,255,0.3)}
+
+  /* Traffic timeline */
+  .traffic-timeline{display:flex;align-items:flex-end;gap:6px;height:60px;margin-top:8px}
+  .traffic-bar{flex:1;background:linear-gradient(to top,#3b82f6,#93c5fd);border-radius:4px 4px 0 0;transition:height 0.4s cubic-bezier(0.4,0,0.2,1);min-height:4px;position:relative}
+  .traffic-bar::after{content:attr(data-val);position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);font-size:0.65rem;color:var(--text-muted);white-space:nowrap}
+
+  /* Prediction box */
+  .predict-box{display:flex;align-items:center;gap:16px;padding:18px 22px;background:linear-gradient(135deg,rgba(37,99,235,0.08),rgba(96,165,250,0.05));border:1px solid rgba(37,99,235,0.2);border-radius:14px;margin-top:14px}
+  .predict-val{font-family:'Sora',sans-serif;font-size:1.8rem;font-weight:700;color:var(--accent)}
+  .predict-label{font-size:0.8rem;color:var(--text-muted)}
+
+  /* Toast */
+  .toast{position:fixed;bottom:28px;right:28px;background:rgba(15,23,42,0.92);backdrop-filter:blur(16px);color:white;padding:14px 22px;border-radius:14px;font-size:0.85rem;border:1px solid rgba(255,255,255,0.1);box-shadow:0 8px 32px rgba(0,0,0,0.2);transform:translateY(80px);opacity:0;transition:all 0.4s cubic-bezier(0.34,1.56,0.64,1);z-index:999;display:flex;align-items:center;gap:10px;max-width:320px}
+  .toast.show{transform:translateY(0);opacity:1}
+
+  /* Spinner */
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .spinner{display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:middle;margin-right:4px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">☁</div>
+    CloudBalance
+  </div>
+  <div style="display:flex;gap:16px;align-items:center">
+    <div style="font-size:0.78rem;color:var(--text-muted)">API: <code style="background:rgba(37,99,235,0.08);padding:2px 8px;border-radius:6px;color:var(--accent)">localhost:8080</code></div>
+    <div class="status-badge"><div class="status-dot"></div>System Operational</div>
+  </div>
+</header>
+
+<div class="container">
+
+  <div style="margin-bottom:28px">
+    <div class="page-title">Load Orchestrator</div>
+    <div class="page-sub">Intelligent request distribution across cloud servers · Auto-scaling enabled</div>
+  </div>
+
+  <!-- Stats Row -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Total Servers</div>
+      <div class="stat-value" id="statServers">—</div>
+      <div class="stat-sub">Active instances</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Load</div>
+      <div class="stat-value" id="statLoad">—</div>
+      <div class="stat-sub">Requests assigned</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Capacity</div>
+      <div class="stat-value" id="statCap">—</div>
+      <div class="stat-sub">Max request slots</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Avg Utilisation</div>
+      <div class="stat-value" id="statUtil">—</div>
+      <div class="stat-sub">Cluster-wide</div>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- LEFT: Actions -->
+    <div style="display:flex;flex-direction:column;gap:20px">
+
+      <div class="glass-card">
+        <div class="card-title">Operations</div>
+        <div class="actions-grid">
+
+          <div class="action-btn" id="btnAddReq" onclick="toggleAddRequest()">
+            <div class="btn-icon" style="background:rgba(37,99,235,0.1);color:#2563eb">📥</div>
+            <div class="btn-label">Add Request</div>
+            <div class="btn-desc">Route n requests</div>
+          </div>
+
+          <div class="action-btn" onclick="op_showUsage()">
+            <div class="btn-icon" style="background:rgba(16,185,129,0.1);color:#10b981">📊</div>
+            <div class="btn-label">Show Usage</div>
+            <div class="btn-desc">Load / capacity</div>
+          </div>
+
+          <div class="action-btn" onclick="op_maxUsage()">
+            <div class="btn-icon" style="background:rgba(245,158,11,0.1);color:#f59e0b">🏆</div>
+            <div class="btn-label">Max Usage</div>
+            <div class="btn-desc">Busiest server</div>
+          </div>
+
+          <div class="action-btn" onclick="op_median()">
+            <div class="btn-icon" style="background:rgba(139,92,246,0.1);color:#8b5cf6">〰</div>
+            <div class="btn-label">Median Load</div>
+            <div class="btn-desc">Statistical midpoint</div>
+          </div>
+
+          <div class="action-btn" onclick="op_overload()">
+            <div class="btn-icon" style="background:rgba(239,68,68,0.1);color:#ef4444">⚠️</div>
+            <div class="btn-label">Check Overload</div>
+            <div class="btn-desc">90% threshold</div>
+          </div>
+
+          <div class="action-btn" onclick="op_recordTraffic()">
+            <div class="btn-icon" style="background:rgba(20,184,166,0.1);color:#14b8a6">📝</div>
+            <div class="btn-label">Record Traffic</div>
+            <div class="btn-desc">Snapshot load</div>
+          </div>
+
+          <div class="action-btn" style="grid-column:1/-1" onclick="op_predict()">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div class="btn-icon" style="background:rgba(59,130,246,0.1);color:#3b82f6">🔮</div>
+              <div>
+                <div class="btn-label">Predict Load</div>
+                <div class="btn-desc">Moving average forecast (requires ≥2 snapshots)</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Add Request Input -->
+        <div id="addRequestSection" style="display:none;margin-top:16px">
+          <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:8px">How many requests to add?</div>
+          <div class="input-group">
+            <input class="glass-input" id="reqCount" type="number" placeholder="e.g. 50" min="1" max="500"
+                   onkeydown="if(event.key==='Enter') op_addRequest()" />
+            <button class="submit-btn" onclick="op_addRequest()">Dispatch</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Traffic History -->
+      <div class="glass-card">
+        <div class="card-title">Traffic History</div>
+        <div id="trafficTimelineWrap">
+          <div style="color:var(--text-light);font-size:0.82rem">No snapshots yet. Use <b>Record Traffic</b>.</div>
+        </div>
+        <div id="predictResult" style="display:none">
+          <div style="font-size:0.8rem;color:var(--text-muted);margin-top:14px">Predicted next load</div>
+          <div class="predict-box">
+            <div style="font-size:26px">🔮</div>
+            <div>
+              <div class="predict-val" id="predictVal">—</div>
+              <div class="predict-label" id="predictMeta">Moving avg of last 3 snapshots</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: Server Viz + Console -->
+    <div style="display:flex;flex-direction:column;gap:20px">
+
+      <div class="glass-card">
+        <div class="card-title">Live Server State</div>
+        <div class="server-scroll server-list" id="serverList">
+          <div style="color:var(--text-light);font-size:0.82rem">Click <b>Show Usage</b> to load server state.</div>
+        </div>
+      </div>
+
+      <div class="glass-card" style="padding:0;overflow:hidden">
+        <div style="padding:16px 20px 10px;border-bottom:1px solid rgba(148,163,184,0.15)">
+          <div class="card-title" style="margin-bottom:0">Output Log</div>
+        </div>
+        <div class="console-wrap">
+          <div class="console-header">
+            <div class="console-dot cd-red"></div>
+            <div class="console-dot cd-yel"></div>
+            <div class="console-dot cd-grn"></div>
+            <span class="console-label">cloudbalance — load-orchestrator · localhost:8080</span>
+          </div>
+          <div class="console-body" id="consoleBody">
+            <span class="log-muted">Waiting for operations...</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast">
+  <span id="toastIcon">ℹ️</span>
+  <span id="toastMsg"></span>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+//  API layer — all calls go through here
+// ══════════════════════════════════════════════════════════
+const API = '/api';
+
+async function apiFetch(method, path, params = {}) {
+  let url = API + path;
+  if (method === 'GET' && Object.keys(params).length) {
+    url += '?' + new URLSearchParams(params);
+  }
+  const opts = { method };
+  if (method === 'POST' && Object.keys(params).length) {
+    url += '?' + new URLSearchParams(params);
+  }
+  const res = await fetch(url, opts);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(err.message || res.statusText);
+  }
+  return res.json();
+}
+
+// ══════════════════════════════════════════════════════════
+//  UI helpers
+// ══════════════════════════════════════════════════════════
+function log(entries) {
+  const cb = document.getElementById('consoleBody');
+  // clear placeholder
+  if (cb.querySelector('.log-muted')) cb.innerHTML = '';
+  const cls = { info:'log-info', success:'log-success', warn:'log-warn',
+                danger:'log-danger', accent:'log-accent', muted:'log-muted' };
+  for (const e of entries) {
+    const d = document.createElement('div');
+    d.className = cls[e.t] || 'log-info';
+    const ts = new Date().toLocaleTimeString('en', { hour12: false });
+    d.textContent = `[${ts}] ${e.m}`;
+    cb.appendChild(d);
+  }
+  cb.scrollTop = cb.scrollHeight;
+}
+
+function showToast(icon, msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastIcon').textContent = icon;
+  document.getElementById('toastMsg').textContent  = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+function barColor(pct) {
+  if (pct >= 90) return 'linear-gradient(to right,#ef4444,#fca5a5)';
+  if (pct >= 65) return 'linear-gradient(to right,#f59e0b,#fde68a)';
+  return 'linear-gradient(to right,#3b82f6,#93c5fd)';
+}
+
+function renderServers(servers) {
+  const list = document.getElementById('serverList');
+  list.innerHTML = '';
+  let totalLoad = 0, totalCap = 0;
+  for (const s of servers) {
+    totalLoad += s.load; totalCap += s.capacity;
+    const pct = s.usagePct.toFixed(1);
+    list.innerHTML += `
+      <div class="server-row">
+        <div class="server-name">${s.name}</div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${Math.min(100,s.usagePct)}%;background:${barColor(s.usagePct)}"></div>
+        </div>
+        <div class="server-meta">${s.load}/${s.capacity}</div>
+        <div class="server-badge badge-${s.status}">${s.status}</div>
+      </div>`;
+  }
+  document.getElementById('statServers').textContent = servers.length;
+  document.getElementById('statLoad').textContent    = totalLoad;
+  document.getElementById('statCap').textContent     = totalCap;
+  const util = totalCap > 0 ? ((totalLoad / totalCap) * 100).toFixed(1) : 0;
+  document.getElementById('statUtil').textContent    = util + '%';
+}
+
+function renderTrafficHistory(history) {
+  const wrap = document.getElementById('trafficTimelineWrap');
+  if (!history || history.length === 0) {
+    wrap.innerHTML = '<div style="color:var(--text-light);font-size:0.82rem">No snapshots yet. Use <b>Record Traffic</b>.</div>';
+    return;
+  }
+  const max = Math.max(...history, 1);
+  const bars = history.map((v, i) => {
+    const h = Math.max(8, Math.round((v / max) * 55));
+    return `<div class="traffic-bar" style="height:${h}px" data-val="${v}" title="T${i+1}: ${v}"></div>`;
+  }).join('');
+  const labels = history.map((_, i) => `<span>T${i+1}</span>`).join('');
+  wrap.innerHTML = `
+    <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:8px">
+      ${history.length} snapshot${history.length !== 1 ? 's' : ''} recorded
+    </div>
+    <div class="traffic-timeline">${bars}</div>
+    <div style="display:flex;justify-content:space-between;font-size:0.67rem;color:var(--text-light);margin-top:5px">${labels}</div>`;
+}
+
+function setLoading(btnEl, loading) {
+  btnEl.disabled = loading;
+  const lbl = btnEl.querySelector('.btn-label');
+  if (lbl) lbl.textContent = loading ? '⏳ Loading…' : btnEl.dataset.label;
+}
+
+// ══════════════════════════════════════════════════════════
+//  Operations — each one calls the Spring Boot REST API
+// ══════════════════════════════════════════════════════════
+
+function toggleAddRequest() {
+  const s = document.getElementById('addRequestSection');
+  s.style.display = s.style.display === 'none' ? 'block' : 'none';
+  if (s.style.display === 'block') document.getElementById('reqCount').focus();
+}
+
+async function op_addRequest() {
+  const n = parseInt(document.getElementById('reqCount').value);
+  if (!n || n < 1) { showToast('⚠️', 'Enter a valid number of requests'); return; }
+  document.getElementById('reqCount').value = '';
+  document.getElementById('addRequestSection').style.display = 'none';
+
+  log([{ t: 'accent', m: `━━ Add Request: ${n} incoming ━━` }]);
+  try {
+    const resp = await apiFetch('POST', '/add-request', { n });
+    const d    = resp.data;
+    const entries = [
+      { t: 'info',    m: `Initially processed on existing servers: ${d.initiallyProcessed}` },
+    ];
+    if (d.autoScaled) {
+      entries.push({ t: 'warn', m: `Auto-scaling triggered for ${d.requested - d.initiallyProcessed} requests` });
+      for (const l of d.scaleLog) entries.push({ t: 'info', m: l });
+    }
+    entries.push({ t: 'success', m: `✓ Total Processed: ${d.totalProcessed}` });
+    entries.push({ t: d.unprocessed > 0 ? 'danger' : 'success', m: `Total Unprocessed: ${d.unprocessed}` });
+    log(entries);
+    showToast('📥', `Processed ${d.totalProcessed}/${n} requests`);
+    await refreshServers();
+  } catch (e) {
+    log([{ t: 'danger', m: `Error: ${e.message}` }]);
+    showToast('❌', e.message);
+  }
+}
+
+async function op_showUsage() {
+  log([{ t: 'accent', m: '━━ Server Usage ━━' }]);
+  try {
+    const resp    = await apiFetch('GET', '/usage');
+    const servers = resp.data;
+    const entries = servers.map(s => {
+      const pct = s.usagePct.toFixed(1);
+      const bar = '█'.repeat(Math.round(s.usagePct / 10)) + '░'.repeat(10 - Math.round(s.usagePct / 10));
+      const t   = s.status === 'OVERLOADED' ? 'danger' : s.status === 'WARNING' ? 'warn' : 'success';
+      return { t, m: `${s.name.padEnd(9)} [${bar}] ${s.load}/${s.capacity} (${pct}%)` };
+    });
+    log(entries);
+    renderServers(servers);
+    showToast('📊', 'Server usage refreshed');
+  } catch (e) {
+    log([{ t: 'danger', m: `Error: ${e.message}` }]);
+    showToast('❌', e.message);
+  }
+}
+
+async function op_maxUsage() {
+  log([{ t: 'accent', m: '━━ Maximum Usage ━━' }]);
+  try {
+    const resp = await apiFetch('GET', '/max-usage');
+    const d    = resp.data;
+    if (d.maxRequests === 0) {
+      log([{ t: 'muted', m: 'No requests assigned yet.' }]);
+    } else {
+      log([
+        { t: 'warn',    m: `Peak load: ${d.maxRequests} requests` },
+        ...d.servers.map(s => ({ t: 'success', m: `${s}: ${d.maxRequests} req` }))
+      ]);
+    }
+    showToast('🏆', resp.message);
+  } catch (e) {
+    log([{ t: 'danger', m: `Error: ${e.message}` }]);
+    showToast('❌', e.message);
+  }
+}
+
+async function op_median() {
+  log([{ t: 'accent', m: '━━ Median Load ━━' }]);
+  try {
+    const resp = await apiFetch('GET', '/median');
+    if (!resp.success) {
+      log([{ t: 'muted', m: resp.message }]);
+    } else {
+      const d = resp.data;
+      log([
+        { t: 'info',    m: `Sorted loads: [${d.sortedLoads.join(', ')}]` },
+        { t: 'success', m: `Median Load: ${d.median}` }
+      ]);
+    }
+    showToast('〰', resp.message);
+  } catch (e) {
+    log([{ t: 'danger', m: `Error: ${e.message}` }]);
+    showToast('❌', e.message);
+  }
+}
+
+async function op_overload() {
+  log([{ t: 'accent', m: '━━ Overload Status ━━' }]);
+  try {
+    const resp    = await apiFetch('GET', '/overload');
+    const servers = resp.data;
+    const entries = servers.map(s => {
+      const t = s.status === 'OVERLOADED' ? 'danger' : 'success';
+      return { t, m: `${s.name}: ${s.load}/${s.capacity} (${s.usagePct.toFixed(1)}%) — ${s.status}` };
+    });
+    const allOver = servers.every(s => s.status === 'OVERLOADED');
+    if (allOver) entries.push({ t: 'danger', m: '⚠ All servers overloaded → queue incoming requests' });
+    log(entries);
+    renderServers(servers);
+    showToast('⚠️', resp.message);
+  } catch (e) {
+    log([{ t: 'danger', m: `Error: ${e.message}` }]);
+    showToast('❌', e.message);
+  }
+}
+
+async function op_recordTraffic() {
+  log([{ t: 'accent', m: '━━ Traffic Recorded ━━' }]);
+  try {
+    const resp = await apiFetch('POST', '/record-traffic');
+    const d    = resp.data;
+    const entries = [
+      { t: 'info', m: `Current Total Load: ${d.currentTotal}` },
+      { t: 'info', m: `History: [${d.history.join(', ')}]` },
+      ...d.history.map((v, i) => ({ t: 'muted', m: `Time ${i+1} → ${v}` }))
+    ];
+    log(entries);
+    renderTrafficHistory(d.history);
+    showToast('📝', `Snapshot T${d.history.length} recorded (load: ${d.currentTotal})`);
+  } catch (e) {
+    log([{ t: 'danger', m: `Error: ${e.message}` }]);
+    showToast('❌', e.message);
+  }
+}
+
+async function op_predict() {
+  log([{ t: 'accent', m: '━━ Load Prediction ━━' }]);
+  try {
+    const resp = await apiFetch('GET', '/predict');
+    if (!resp.success) {
+      log([{ t: 'warn', m: resp.message }]);
+      showToast('🔮', resp.message);
+      return;
+    }
+    const d = resp.data;
+    log([
+      { t: 'info',    m: `Using last ${d.samplesUsed} snapshot(s)` },
+      { t: 'info',    m: `Recent values: [${d.recentValues.join(', ')}]` },
+      { t: 'success', m: `Predicted next load: ${d.predictedLoad}` }
+    ]);
+    document.getElementById('predictVal').textContent  = d.predictedLoad.toFixed(2);
+    document.getElementById('predictMeta').textContent = `Moving avg of last ${d.samplesUsed} snapshot(s)`;
+    document.getElementById('predictResult').style.display = 'block';
+    showToast('🔮', `Predicted load: ${d.predictedLoad.toFixed(2)}`);
+  } catch (e) {
+    log([{ t: 'danger', m: `Error: ${e.message}` }]);
+    showToast('❌', e.message);
+  }
+}
+
+// ── Auto-refresh server panel after mutations ───────────────────────────
+async function refreshServers() {
+  try {
+    const resp = await apiFetch('GET', '/usage');
+    renderServers(resp.data);
+  } catch (_) { /* silent */ }
+}
+
+// ── Initial load ───────────────────────────────────────────────────────
+(async () => {
+  try {
+    const resp = await apiFetch('GET', '/usage');
+    renderServers(resp.data);
+    log([
+      { t: 'success', m: 'Connected to Spring Boot API on localhost:8080' },
+      { t: 'muted',   m: `${resp.data.length} servers initialised and ready.` }
+    ]);
+  } catch (e) {
+    log([
+      { t: 'danger', m: 'Could not reach backend at localhost:8080' },
+      { t: 'warn',   m: 'Make sure the Spring Boot app is running (mvn spring-boot:run)' }
+    ]);
+    document.getElementById('serverList').innerHTML =
+      '<div style="color:var(--danger);font-size:0.82rem">⚠ Backend offline — start with <code>mvn spring-boot:run</code></div>';
+  }
+})();
+</script>
+</body>
+</html>
