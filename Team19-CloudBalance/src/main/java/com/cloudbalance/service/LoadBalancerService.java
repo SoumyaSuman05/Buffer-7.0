@@ -67,12 +67,32 @@ public class LoadBalancerService {
     }
 
     public ApiResponse.MaxUsageResult getMaxUsage() {
-       
-       
+       if (loadMap.isEmpty()) {
+            return new ApiResponse.MaxUsageResult(0, Collections.emptyList());
+        }
+        int max = Collections.max(loadMap.values());
+        List<String> maxServers = new ArrayList<>();
+        for (Map.Entry<String, Integer> e : loadMap.entrySet()) {
+            if (e.getValue() == max) maxServers.add(e.getKey());
+        }
+        return new ApiResponse.MaxUsageResult(max, maxServers);
     }
 
     public ApiResponse.MedianResult getMedianLoad() {
-       
+               if (loadMap.isEmpty()) {
+            return new ApiResponse.MedianResult(0, Collections.emptyList());
+        }
+        List<Integer> loads = new ArrayList<>(loadMap.values());
+        Collections.sort(loads);
+
+        int    n = loads.size();
+        double median;
+        if (n % 2 == 1) {
+            median = loads.get(n / 2);
+        } else {
+            median = (loads.get(n / 2) + loads.get((n / 2) - 1)) / 2.0;
+        }
+        return new ApiResponse.MedianResult(median, loads);
     }
 
     public List<ApiResponse.ServerInfo> checkOverload() {
