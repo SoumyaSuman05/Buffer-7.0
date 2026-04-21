@@ -101,11 +101,23 @@ public class LoadBalancerService {
 
     
     public ApiResponse.TrafficResult recordTraffic() {
-        
+        int total = totalRequests();
+        trafficHistory.add(total);
+        return new ApiResponse.TrafficResult(total, new ArrayList<>(trafficHistory));
     }
 
     public ApiResponse.PredictResult predictLoad() {
-       
+        int n = trafficHistory.size();
+        if (n < 2) {
+            return null; 
+        }
+        int k = Math.min(3, n);
+        int recentSum  = 0;
+        List<Integer> recent = trafficHistory.subList(n - k, n);
+        for (int v : recent) recentSum += v;
+
+        double predicted = recentSum / (double) k;
+        return new ApiResponse.PredictResult(predicted, k, new ArrayList<>(recent));
     }
 
 
