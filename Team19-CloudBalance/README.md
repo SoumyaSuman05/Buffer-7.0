@@ -150,3 +150,5 @@ https://drive.google.com/file/d/1Eazue03FlcxbBE7LR-9oWDoLCsE9ELzU/view?usp=shari
 
 ```bash
 mvn spring-boot:run
+Navigate to http://localhost:8080 in your browser.
+
