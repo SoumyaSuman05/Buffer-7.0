@@ -148,5 +148,3 @@ else → capacity 10
 
 ```bash
 mvn spring-boot:run
-- Uses Simple Moving Average (SMA)  
-- k = min(3, total snapshots)  
